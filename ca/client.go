@@ -98,12 +98,13 @@ type RetryFunc func(code int) bool
 type ClientOption func(o *clientOptions) error
 
 type clientOptions struct {
-	transport    http.RoundTripper
-	rootSHA256   string
-	rootFilename string
-	rootBundle   []byte
-	certificate  tls.Certificate
-	retryFunc    RetryFunc
+	transport            http.RoundTripper
+	rootSHA256           string
+	rootFilename         string
+	rootBundle           []byte
+	certificate          tls.Certificate
+	getClientCertificate func(*tls.CertificateRequestInfo) (*tls.Certificate, error)
+	retryFunc            RetryFunc
 }
 
 func (o *clientOptions) apply(opts []ClientOption) (err error) {
@@ -138,6 +139,7 @@ func (o *clientOptions) applyDefaultIdentity() error {
 		return nil
 	}
 	o.certificate = crt
+	o.getClientCertificate = i.GetClientCertificateFunc()
 	return nil
 }
 
@@ -192,6 +194,7 @@ func (o *clientOptions) getTransport(endpoint string) (tr http.RoundTripper, err
 			}
 			if len(tr.TLSClientConfig.Certificates) == 0 && tr.TLSClientConfig.GetClientCertificate == nil {
 				tr.TLSClientConfig.Certificates = []tls.Certificate{o.certificate}
+				tr.TLSClientConfig.GetClientCertificate = o.getClientCertificate
 			}
 		case *http2.Transport:
 			if tr.TLSClientConfig == nil {
@@ -199,6 +202,7 @@ func (o *clientOptions) getTransport(endpoint string) (tr http.RoundTripper, err
 			}
 			if len(tr.TLSClientConfig.Certificates) == 0 && tr.TLSClientConfig.GetClientCertificate == nil {
 				tr.TLSClientConfig.Certificates = []tls.Certificate{o.certificate}
+				tr.TLSClientConfig.GetClientCertificate = o.getClientCertificate
 			}
 		default:
 			return nil, errors.Errorf("unsupported transport type %T", tr)
